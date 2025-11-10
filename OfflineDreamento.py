@@ -35,6 +35,7 @@ from sklearn.preprocessing import MinMaxScaler
 import yasa
 import platform 
 from pathlib import Path
+from datetime import datetime
 
 matplotlib.use('TkAgg')
 
@@ -696,7 +697,7 @@ class OfflineDreamento():
             
             plt.tight_layout()
             MsgBox = tk.messagebox.askquestion ('EEG vs EMG synchronization','Look at the data during sync period. Does the data require further synchronization (recommended to sync further)?',icon = 'warning')
-            plt.show()
+            self._finalize_figure(fig, label='sync_preview', show=True)
             if MsgBox == 'no':
                 messagebox.showinfo("Information",f"OK! Now we proceed with the main analysis ... Please click on OK and wait ...")
                 self.flag_sync_EEG_EMG = False
@@ -815,7 +816,7 @@ class OfflineDreamento():
                         MsgBox = tk.messagebox.askquestion ('Satisfying results?','Are the results satisfying? If not click on No to try again with the other method.',icon = 'warning')
                         if MsgBox == 'yes':
                             messagebox.showinfo("Information",f"Perfect! Now we proceed with the main analysis ... Click on OK and wait ...")
-                            plt.show()
+                            self._finalize_figure(fig, label='sync_auto_result', show=True)
                             break
                             
                     else: 
@@ -862,12 +863,12 @@ class OfflineDreamento():
                             line = self.axs[2].plot(self.EMG_Abs2, picker=2, color = 'orchid')
                             line = self.axs[3].plot(self.EMG_Abs3, picker=2, color = 'thistle')
                             plt.tight_layout()
-                            plt.show()
+                            self._finalize_figure(self.fig, label='sync_manual_markers', show=True)
                             self.fig.canvas.mpl_connect('pick_event', self.onpick)
                             MsgBox = tk.messagebox.askquestion ('Satisfying results?','Are the results satisfying? If not click on No to try again with the other method.',icon = 'warning')
                             if MsgBox == 'yes':
                                 messagebox.showinfo("Information",f"Perfect! Now we proceed with the main analysis ... Please click on OK and wait ...")
-                                plt.show()
+                                self._finalize_figure(self.fig, label='sync_manual_result', show=True)
                                 break
                             
              
@@ -2036,8 +2037,8 @@ class OfflineDreamento():
     
         if ax is None:
             plt.plot(lags, c / n)
-            plt.show()
-    
+            self._finalize_figure(label='cross_correlation')
+
         else:
             ax.plot(lags, c / n, color='k', label="Cross-correlation")
     
@@ -2123,7 +2124,7 @@ class OfflineDreamento():
             # plt.savefig('similarityT.png', transparent=True)
             # plt.savefig('similarityT.pdf', transparent=True)
             # plt.savefig('similarityT.svg', transparent=True)
-            plt.show()
+            self._finalize_figure(fig, label='lag_alignment', base_hint=path_EDF, show=True)
     
             # from scipy.signal import butter, filtfilt
             # sigScriptFiltered = sigScript_org / 1e6
@@ -2138,12 +2139,12 @@ class OfflineDreamento():
             # sigScriptFiltered_R = filtfilt(b, a, data)
     
             # Now plot the complete signals
-            plt.figure()
+            fig_synced = plt.figure()
             plt.title("Synced Signals")
             plt.plot(sigScript_org, label='EEG L - Dreamento')
             plt.plot(sigHDRecorder_org[samples_before_begin:]*1e6, label='EEG L - HDRecorder')
             plt.legend()
-            plt.show()
+            self._finalize_figure(fig_synced, label='synced_signals', base_hint=path_EDF, show=True)
                 
         # Synced data
         sigHDRecorder_org_synced = sigHDRecorder_org[samples_before_begin:]
@@ -2152,7 +2153,8 @@ class OfflineDreamento():
         print('Lag cmputation finished')
         return samples_before_begin, sigHDRecorder_org_synced, sigScript_org, sigScript_org_R
     #%% Plot PSD
-    def plot_welch_periodogram(self, data,  sf=256, win_size = 4, log_power = False):
+    def plot_welch_periodogram(self, data,  sf=256, win_size = 4, log_power = False,
+                               save_dir=None, filename=None, show_plot=True):
         
         """
         Plot the welch periodogram
@@ -2162,8 +2164,11 @@ class OfflineDreamento():
         :param sf: sampoling frequency 
         :param win_size: the size of sliding windows for Welch method.
         :param log_power: compute logarithmic power
+        :param save_dir: optional directory or file path to store the figure
+        :param filename: optional filename when save_dir is a directory
+        :param show_plot: whether to display the figure immediately
         
-        :returns: plot
+        :returns: matplotlib figure handle
         
         """
         
@@ -2182,40 +2187,137 @@ class OfflineDreamento():
         ret = yasa.bandpower(data, sf=sf)
         # Plot the power spectrum
         sns.set(font_scale=1.2, style='white')
-        plt.figure(figsize=(8, 4))
-        plt.plot(freqs, psd, color='k', lw=2)
-        plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Power spectral density (V^2 / Hz)')
-        plt.ylim([0, psd.max() * 1.1])
-        plt.title("Welch's periodogram")
-        plt.xlim([0, 30])
-        sns.despine()
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(freqs, psd, color='k', lw=2)
+        ax.set_xlabel('Frequency (Hz)')
+        ax.set_ylabel('Power spectral density (V^2 / Hz)')
+        ax.set_ylim([0, psd.max() * 1.1])
+        ax.set_title("Welch's periodogram")
+        ax.set_xlim([0, 30])
+        sns.despine(ax=ax)
         
         
         # Delta
-        plt.axvline(.5, linestyle='--', color='black')
-        plt.axvline(4, linestyle='--', color='black')
+        ax.axvline(.5, linestyle='--', color='black')
+        ax.axvline(4, linestyle='--', color='black')
     
         # Theta
-        plt.axvline(8, linestyle='--', color='black')
+        ax.axvline(8, linestyle='--', color='black')
     
         # Alpha
-        plt.axvline(12, linestyle='--', color='black')
+        ax.axvline(12, linestyle='--', color='black')
         
         loc_pow_vals = np.mean([np.min(psd), np.max(psd)])
         loc_labels = loc_pow_vals
-        plt.text(1.3, loc_labels, 'Delta', size=8)
-        plt.text(4.8, loc_labels, 'Theta', size=8)
-        plt.text(8.8, loc_labels, 'Alpha', size=8)
-        plt.text(12.8, loc_labels, 'Beta', size=8)
+        ax.text(1.3, loc_labels, 'Delta', size=8)
+        ax.text(4.8, loc_labels, 'Theta', size=8)
+        ax.text(8.8, loc_labels, 'Alpha', size=8)
+        ax.text(12.8, loc_labels, 'Beta', size=8)
     
         # legend - values
-        plt.legend([f'Delta (0.5-4 Hz)): {round(ret["Delta"][0] * 100, 2)}% \n\
-    Theta (4-8 Hz): {round(ret["Theta"][0] * 100, 2)}% \n\
-    Alpha (8-12 Hz): {round(ret["Alpha"][0] * 100, 2)}% \n\
-    Sigma (12-16 Hz): {round(ret["Sigma"][0] * 100, 2)}% \n\
-    Beta (16-30 Hz): {round(ret["Beta"][0] * 100, 2)}% \n\
-    Gamma (30-40 Hz): {round(ret["Gamma"][0] * 100, 2)}%'], prop={'size': 10}, frameon=False)
+        band_labels = [
+            ("Delta (0.5-4 Hz)", "Delta"),
+            ("Theta (4-8 Hz)", "Theta"),
+            ("Alpha (8-12 Hz)", "Alpha"),
+            ("Sigma (12-16 Hz)", "Sigma"),
+            ("Beta (16-30 Hz)", "Beta"),
+            ("Gamma (30-40 Hz)", "Gamma"),
+        ]
+        legend_lines = []
+        for label, key in band_labels:
+            value = ret[key].iloc[0] * 100
+            legend_lines.append(f'{label}: {round(value, 2)}%')
+        ax.legend(['\n'.join(legend_lines)], prop={'size': 10}, frameon=False)
+        fig.tight_layout()
+
+        if save_dir is None:
+            self._finalize_figure(
+                fig,
+                label='periodogram',
+                base_hint=getattr(self, 'HDRecorderRecording', None),
+                show=show_plot,
+                block=False,
+            )
+            return fig
+
+        resolved_dir = Path(save_dir)
+        if filename is None:
+            filename = 'periodogram.png'
+
+        if resolved_dir.suffix:
+            save_path = resolved_dir
+        else:
+            resolved_dir.mkdir(parents=True, exist_ok=True)
+            save_path = resolved_dir / filename
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f'PSD plot saved to {save_path}')
+
+        if show_plot:
+            plt.show(block=False)
+
+        return fig
+    
+    #%% Figure saving helpers
+    def _resolve_figure_save_context(self, base_hint=None):
+        """
+        Determine the directory and base filename to use when saving figures.
+        """
+        candidates = []
+        if base_hint is not None:
+            candidates.append(base_hint)
+        attr_candidates = [
+            'HDRecorderRecording',
+            'ZmaxDondersRecording',
+            'path_to_EMG',
+            'path_to_json_markers'
+        ]
+        for attr in attr_candidates:
+            if not hasattr(self, attr):
+                continue
+            candidate = getattr(self, attr)
+            if isinstance(candidate, (list, tuple)) and candidate:
+                candidate = candidate[0]
+            if candidate:
+                candidates.append(candidate)
+        for candidate in candidates:
+            try:
+                path_obj = Path(candidate).expanduser()
+            except TypeError:
+                continue
+            if path_obj.is_dir():
+                return path_obj.resolve(), path_obj.name
+            if path_obj.exists():
+                return path_obj.parent.resolve(), path_obj.stem
+        return Path.cwd(), 'Dreamento'
+
+    def _save_figure_to_subfolder(self, fig, label, base_hint=None, subfolder_name='DreamentoFigures'):
+        """
+        Save the provided matplotlib figure inside a subfolder next to the data.
+        """
+        base_dir, base_name = self._resolve_figure_save_context(base_hint=base_hint)
+        target_dir = base_dir / subfolder_name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'{base_name}_{label}_{timestamp}.png'
+        save_path = target_dir / filename
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f'Saved figure to {save_path}')
+        return save_path
+    
+    def _finalize_figure(self, fig=None, label='figure', base_hint=None, show=True, block=True):
+        """
+        Save the given Matplotlib figure (defaults to the current one) and optionally display it.
+        """
+        if fig is None:
+            fig = plt.gcf()
+        self._save_figure_to_subfolder(fig, label=label, base_hint=base_hint)
+        if show:
+            plt.show(block=block)
+        else:
+            plt.close(fig)
+        return fig
         
     #%% AssignMarkersToRecordedData EEG + TFR
     def AssignMarkersToRecordedData_EEG_TFR(self, data, data_R, sf, path_to_json_markers,EMG_path, markers_to_show = ['light', 'manual', 'sound'],\
@@ -2798,7 +2900,7 @@ class OfflineDreamento():
             ax_EMG2.set_yticks((self.desired_EMG_scale[0], 0, self.desired_EMG_scale[1]))
             #plt.subplots_adjust(left=0.1, right=0.1, top=0.9, bottom=0.1)
             plt.tight_layout()
-            plt.show()
+            self._finalize_figure(fig, label='emg_alignment_overview', show=True)
             
             global sig_emg_1, sig_emg_2, sig_emg_3
              
@@ -3274,7 +3376,7 @@ class OfflineDreamento():
             ax_EMG2.set_yticks((self.desired_EMG_scale[0], 0, self.desired_EMG_scale[1]))
             #plt.subplots_adjust(left=0.1, right=0.1, top=0.9, bottom=0.1)
             plt.tight_layout()
-            plt.show()
+            self._finalize_figure(fig, label='emg_alignment_hypnodyne_only', show=True)
             
             if int(self.plot_EMG_quality_evaluation.get()) == 1:
                 
@@ -3456,6 +3558,7 @@ class OfflineDreamento():
             ax2.set_visible(False)
             ax_epoch_light.set_visible(False)
             ax_epoch_marker.set_visible(False)
+        self._save_figure_to_subfolder(fig, label='Dreamento_TFR_overview', base_hint=path_to_json_markers)
         return fig, markers_details
     
     #%% AssignMarkersToRecordedData EEG + TFR
@@ -4209,6 +4312,7 @@ class OfflineDreamento():
                 ax4.plot(np.arange(len(data_R))/256, spindles_R_highlight, 'green')
                                 
         
+        self._save_figure_to_subfolder(fig, label='Dreamento_TFR_noEMG', base_hint=path_to_json_markers)
         return fig, markers_details
     
     #%% Autoscoring caution
@@ -4219,12 +4323,12 @@ class OfflineDreamento():
 # =============================================================================
 
     #%% Autoscoring    
-    def autoscoring(self, DreamentoScorer_path = '.\\DreamentoScorer\\',\
-                    model_path = "PooledData_Full_20percent_valid.sav",\
-                    standard_scaler_path = "StandardScaler_PooledDataset_Full_20percent_valid.sav",\
-                    feat_selection_path = "Selected_Features_BoturaAfterTD=3_Bidirectional_Donders2022_19-04-2023.pickle",\
-                    apply_post_scoring_N1_correction = True,
-                    fs = 256):
+    def autoscoring(self, DreamentoScorer_path=None,\
+                    model_path="PooledData_Full_20percent_valid.sav",\
+                    standard_scaler_path="StandardScaler_PooledDataset_Full_20percent_valid.sav",\
+                    feat_selection_path="Selected_Features_BoturaAfterTD=3_Bidirectional_Donders2022_19-04-2023.pickle",\
+                    apply_post_scoring_N1_correction=True,\
+                    fs=256):
         
         # old CS model
         # 'Dreamento_autoscoring_Lightgbm_td=3_bidirectional_version_alpha_trained_on_69_data.sav',\
@@ -4232,22 +4336,19 @@ class OfflineDreamento():
         # 'Selected_Features_BoturaAfterTD=3_Bidirectional_3013097-06_061222.pickle',\
         # ==================================
         import joblib
-        path_to_DreamentoScorer = os.path.abspath(os.path.normpath(DreamentoScorer_path))
-        
-        # Init dir tio read libraries
-        try:
-            # Change the current working Directory    
-            os.chdir(path_to_DreamentoScorer)
-            print("Loading DreamentoScorer class ... ")
-            
-        except OSError:
-            print("Can't change the Current Working Directory")     
-            os.chdir('DreamentoScorer')
+        from pathlib import Path
 
-        print(f'current path is {path_to_DreamentoScorer}')
+        # Resolve the DreamentoScorer directory cross‑platform without changing CWD
+        if DreamentoScorer_path is None:
+            model_dir = Path(__file__).resolve().parent / "DreamentoScorer"
+        else:
+            model_dir = Path(DreamentoScorer_path)
+        model_dir = model_dir.resolve()
+        print(f'Using DreamentoScorer dir: {model_dir}')
+
         from antropy.entropy import spectral_entropy
-        scorer_module_path = Path(__file__).parent / 'DreamentoScorer' / 'DreamentoScorer.py'
-        if not os.path.isfile(scorer_module_path):
+        scorer_module_path = model_dir / 'DreamentoScorer.py'
+        if not scorer_module_path.is_file():
             raise FileNotFoundError(f'DreamentoScorer module not found at {scorer_module_path}')
         spec = importlib.util.spec_from_file_location('dreamento_scorer_module', scorer_module_path)
         if spec is None or spec.loader is None:
@@ -4337,7 +4438,7 @@ class OfflineDreamento():
 
         # Z-score features
         print('Importing DreamentoScorer model ...')
-        sc_fname = standard_scaler_path#'StandardScaler_TrainedonQS_1st_iter_To_transform_ZmaxDonders'
+        sc_fname = str(model_dir / standard_scaler_path)
         sc = joblib.load(sc_fname)
         X_test = sc.transform(X_test)
 
@@ -4349,16 +4450,16 @@ class OfflineDreamento():
 
         # Load selected features
         print('loading results of feature selection from the trained data')
-        path_selected_feats = feat_selection_path
-        with open(path_selected_feats, "rb") as f: 
+        path_selected_feats = str(model_dir / feat_selection_path)
+        with open(path_selected_feats, "rb") as f:
             selected_feats_ind = pickle.load(f)
             
         X_test  = X_test_td[:, selected_feats_ind]
 
         # Load DreamentoScorer
         print('Loading scoring model ...')
-        model_dir = model_path
-        DreamentoScorer = joblib.load(model_dir)
+        model_file = str(model_dir / model_path)
+        DreamentoScorer = joblib.load(model_file)
 
         self.y_pred = DreamentoScorer.predict(X_test)
         
@@ -4395,30 +4496,28 @@ class OfflineDreamento():
                 self.y_pred[idx_actual_N1] = 1              
 
     #%% Bulk autoscoring function
-    def bulk_autoscoring(self, DreamentoScorer_path = ".\\DreamentoScorer\\",\
-                    model_path = "PooledData_Full_20percent_valid.sav",\
-                    standard_scaler_path = "StandardScaler_PooledDataset_Full_20percent_valid.sav",\
-                    feat_selection_path = "Selected_Features_BoturaAfterTD=3_Bidirectional_Donders2022_19-04-2023.pickle",\
-                    apply_post_scoring_N1_correction = True,\
-                    fs = 256):
+    def bulk_autoscoring(self, DreamentoScorer_path=None,\
+                    model_path="PooledData_Full_20percent_valid.sav",\
+                    standard_scaler_path="StandardScaler_PooledDataset_Full_20percent_valid.sav",\
+                    feat_selection_path="Selected_Features_BoturaAfterTD=3_Bidirectional_Donders2022_19-04-2023.pickle",\
+                    apply_post_scoring_N1_correction=True,\
+                    fs=256):
                
         import joblib
-        path_to_DreamentoScorer = os.path.abspath(os.path.normpath(DreamentoScorer_path))
+        from pathlib import Path
         messagebox.showinfo(title = "Bulk Autoscoring", message = 'Autoscoring started ... \nDepending on the number of scorings, this may take a while ... \nIf you selected to store the results, they will be stored in the data folder ...\n An Excel file including the results from all subjects will be stored in the same directory as the initial .txt file\nPlease click on OK and be patient ...')
-        # Init dir tio read libraries
-        try:
-            # Change the current working Directory    
-            os.chdir(path_to_DreamentoScorer)
-            print("Loading DreamentoScorer class ... ")
-            
-        except OSError:
-            print("Can't change the Current Working Directory")  
-            os.chdir('DreamentoScorer')
 
-        print(f'current path is {path_to_DreamentoScorer}')
+        # Resolve DreamentoScorer directory cross‑platform without changing CWD
+        if DreamentoScorer_path is None:
+            model_dir = Path(__file__).resolve().parent / "DreamentoScorer"
+        else:
+            model_dir = Path(DreamentoScorer_path)
+        model_dir = model_dir.resolve()
+        print(f'Using DreamentoScorer dir: {model_dir}')
+
         from antropy.entropy import spectral_entropy
-        scorer_module_path = os.path.join(path_to_DreamentoScorer, 'DreamentoScorer.py')
-        if not os.path.isfile(scorer_module_path):
+        scorer_module_path = model_dir / 'DreamentoScorer.py'
+        if not scorer_module_path.is_file():
             raise FileNotFoundError(f'DreamentoScorer module not found at {scorer_module_path}')
         spec = importlib.util.spec_from_file_location('dreamento_scorer_module', scorer_module_path)
         if spec is None or spec.loader is None:
@@ -4441,15 +4540,12 @@ class OfflineDreamento():
             counter_scoring = counter_scoring + 1
             print(f'autoscoring folder: {folder_autoscoring} [{counter_scoring} / {len(self.folders_to_be_autoscored)}]')
             
-            #sanity check:
-            if folder_autoscoring[-1] != '/' or folder_autoscoring[-1] != '\\':
-                folder_autoscoring = folder_autoscoring + '\\'
-                
-            data_L = mne.io.read_raw_edf(folder_autoscoring + 'EEG L.edf')
+            # Use pathlib for folder and file paths
+            folder_path = Path(folder_autoscoring)
+            data_L = mne.io.read_raw_edf(str(folder_path / 'EEG L.edf'))
             raw_data_L = data_L.get_data()
             self.sigHDRecorder = np.ravel(raw_data_L)
-            
-            data_r = mne.io.read_raw_edf(folder_autoscoring + 'EEG R.edf')
+            data_r = mne.io.read_raw_edf(str(folder_path / 'EEG R.edf'))
             raw_data_r = data_r.get_data()
             self.sigHDRecorder_r = np.ravel(raw_data_r)
            
@@ -4508,7 +4604,7 @@ class OfflineDreamento():
     
             # Z-score features
             print('Importing DreamentoScorer model ...')
-            sc_fname = standard_scaler_path#'StandardScaler_TrainedonQS_1st_iter_To_transform_ZmaxDonders'
+            sc_fname = str(model_dir / standard_scaler_path)
             sc = joblib.load(sc_fname)
             X_test = sc.transform(X_test)
     
@@ -4520,17 +4616,17 @@ class OfflineDreamento():
     
             # Load selected features
             print('loading results of feature selection from the trained data')
-            path_selected_feats = feat_selection_path
-            with open(path_selected_feats, "rb") as f: 
+            path_selected_feats = str(model_dir / feat_selection_path)
+            with open(path_selected_feats, "rb") as f:
                 selected_feats_ind = pickle.load(f)
                 
             X_test  = X_test_td[:, selected_feats_ind]
     
             # Load DreamentoScorer
             print('Loading scoring model ...')
-            model_dir = model_path
-            print(f'DreamentoScorer model retrieved from: {model_dir}')
-            DreamentoScorer = joblib.load(model_dir)
+            model_file = str(model_dir / model_path)
+            print(f'DreamentoScorer model retrieved from: {model_file}')
+            DreamentoScorer = joblib.load(model_file)
     
             self.y_pred = DreamentoScorer.predict(X_test)
             y_pred_proba = DreamentoScorer.predict_proba(X_test)
@@ -4652,51 +4748,38 @@ class OfflineDreamento():
             #plt.tight_layout()
             # Save results?
             if int(self.checkbox_save_bulk_autoscoring_txt_results_val.get()) == 1:
-                
-                save_path_autoscoring = folder_autoscoring + 'DreamentoScorer.txt'
-                
+                save_path_autoscoring = str(folder_path / 'DreamentoScorer.txt')
                 if os.path.exists(save_path_autoscoring):
                     os.remove(save_path_autoscoring)
-                    
                 saving_dir = save_path_autoscoring
-                
                 a_file = open(saving_dir, "w")
                 a_file.write('=================== Dreamento: an open-source dream engineering toolbox! ===================\nhttps://github.com/dreamento/dreamento')
                 a_file.write('\nThis file has been autoscored by DreamentoScorer! \nSleep stages: Wake:0, N1:1, N2:2, SWS:3, REM:4.\n')
                 a_file.write('============================================================================================\n')
-                
                 for row in self.stage_autoscoring[:,np.newaxis]:
                     np.savetxt(a_file, row, fmt='%1.0f')
                 a_file.close()
-                
                 # Save sleep metrics
-                save_path_stats = folder_autoscoring + 'DreamentoScorer_sleep_stats.json'
-                
+                save_path_stats = str(folder_path / 'DreamentoScorer_sleep_stats.json')
                 if os.path.exists(save_path_stats):
                     os.remove(save_path_stats)
-                    
                 with open(save_path_stats, 'w') as convert_file:
                     convert_file.write(json.dumps(self.stats))
-                    
                 self.all_stats[folder_autoscoring] = self.stats
             #save_figure
             if int(self.checkbox_save_bulk_autoscoring_plot_val.get()) == 1:
-                save_path_plots = folder_autoscoring + 'Dreamento_TFR_autoscoring.png'
-                
+                save_path_plots = str(folder_path / 'Dreamento_TFR_autoscoring.png')
                 if os.path.exists(save_path_plots):
                     os.remove(save_path_plots)
-                    
-                plt.savefig(save_path_plots,dpi = 300)  
-                
+                plt.savefig(save_path_plots,dpi = 300)
             if int(self.checkbox_close_plots_val.get()) == 1:
                 plt.close()
         # Store all stats in a single excel file
 
         df = pd.DataFrame(data=self.all_stats)
         df = (df.T)
-        path_to_save_all_stats = os.path.dirname(self.bulk_autoscoring_files_list[0]) + '\\Dreamento_all_sleep_stats.xlsx'
+        path_to_save_all_stats = str(Path(self.bulk_autoscoring_files_list[0]).parent / 'Dreamento_all_sleep_stats.xlsx')
         print(f'stroing all stats in: {path_to_save_all_stats}')
-        
         # Remove if there is already a file with the same name ...
         if os.path.exists(path_to_save_all_stats):
             os.remove(path_to_save_all_stats)
@@ -5263,7 +5346,8 @@ class OfflineDreamento():
             fig.canvas.mpl_connect('key_press_event', self.pan_nav_ZMaxHypnodyneOnly)
             fig.canvas.mpl_connect('button_press_event', self.onclick_ZMaxHypnodyneOnly)
             messagebox.showinfo(title = "AASM sleep metrics", message = self.stats)
-            
+        
+        self._save_figure_to_subfolder(fig, label='Dreamento_Hypnodyne', base_hint=getattr(self, 'HDRecorderRecording', None))
         return fig        
     
     #%% Retrieve sleep statistics (from yasa)
