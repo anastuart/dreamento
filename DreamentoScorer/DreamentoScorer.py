@@ -22,7 +22,37 @@ from sklearn.ensemble import RandomForestClassifier
 from scipy.signal import argrelextrema
 from sklearn.model_selection import cross_val_score,KFold, cross_validate
 from sklearn.metrics import confusion_matrix, make_scorer, accuracy_score, precision_score, recall_score, f1_score
-from entropy.entropy import spectral_entropy
+# `entropy` package renamed in some environments; fall back to local implementation
+try:
+    from entropy.entropy import spectral_entropy  # type: ignore
+except ImportError:
+    def spectral_entropy(x, sf, method='welch', nperseg=None, normalize=False):
+        """Compute spectral entropy with Welch/FFT methods."""
+        x = np.asarray(x)
+        if x.size == 0:
+            raise ValueError('Input signal must be non-empty')
+
+        if method.lower() == 'welch':
+            _freqs, psd = welch(x, sf, nperseg=nperseg)
+        elif method.lower() == 'fft':
+            _freqs, psd = periodogram(x, sf)
+        else:
+            raise ValueError("method must be 'welch' or 'fft'")
+
+        psd = np.asarray(psd, dtype=float)
+        psd_sum = psd.sum()
+        if psd_sum == 0:
+            raise ValueError('Power spectral density sum is zero')
+        psd /= psd_sum
+
+        # Avoid log(0) by clamping to machine epsilon
+        psd = np.clip(psd, np.finfo(float).eps, 1.0)
+        entropy = -np.sum(psd * np.log2(psd))
+
+        if normalize:
+            entropy /= np.log2(psd.size)
+
+        return entropy
 import seaborn as sb
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
@@ -33,7 +63,24 @@ from scipy.fftpack import fft
 # =============================================================================
 import time
 #import pyeeg
-from scipy.integrate import simps
+try:
+    from scipy.integrate import simps
+except ImportError:  # SciPy dropped simps in favour of simpson()
+    from scipy.integrate import simpson as _simpson
+    import inspect
+
+    _SIMPSON_ACCEPTS_EVEN = 'even' in inspect.signature(_simpson).parameters
+
+    def simps(y, x=None, dx=1.0, axis=-1, even='avg'):
+        """Compatibility wrapper around scipy.integrate.simpson."""
+        kwargs = {}
+        if _SIMPSON_ACCEPTS_EVEN:
+            kwargs['even'] = even
+        elif even != 'avg':
+            raise ValueError(
+                "scipy.integrate.simpson in this environment does not support the "
+                "'even' argument; set even='avg' or upgrade SciPy.")
+        return _simpson(y, x=x, dx=dx, axis=axis, **kwargs)
 import scipy
 import scipy.fftpack
 

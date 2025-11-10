@@ -30,9 +30,11 @@ from scipy.signal import butter, filtfilt
 import itertools
 import matplotlib
 import os
+import importlib.util
 from sklearn.preprocessing import MinMaxScaler
 import yasa
 import platform 
+from pathlib import Path
 
 matplotlib.use('TkAgg')
 
@@ -4230,7 +4232,7 @@ class OfflineDreamento():
         # 'Selected_Features_BoturaAfterTD=3_Bidirectional_3013097-06_061222.pickle',\
         # ==================================
         import joblib
-        path_to_DreamentoScorer = DreamentoScorer_path
+        path_to_DreamentoScorer = os.path.abspath(os.path.normpath(DreamentoScorer_path))
         
         # Init dir tio read libraries
         try:
@@ -4243,9 +4245,17 @@ class OfflineDreamento():
             os.chdir('DreamentoScorer')
 
         print(f'current path is {path_to_DreamentoScorer}')
-        from entropy.entropy import spectral_entropy
-        from DreamentoScorer import DreamentoScorer
-        self.SSN = DreamentoScorer(filename='', channel='', fs = fs, T = 30)
+        from antropy.entropy import spectral_entropy
+        scorer_module_path = Path(__file__).parent / 'DreamentoScorer' / 'DreamentoScorer.py'
+        if not os.path.isfile(scorer_module_path):
+            raise FileNotFoundError(f'DreamentoScorer module not found at {scorer_module_path}')
+        spec = importlib.util.spec_from_file_location('dreamento_scorer_module', scorer_module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f'Unable to import DreamentoScorer from {scorer_module_path}')
+        DreamentoScorer_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(DreamentoScorer_module)
+        DreamentoScorer_class = DreamentoScorer_module.DreamentoScorer
+        self.SSN = DreamentoScorer_class(filename='', channel='', fs = fs, T = 30)
         f_min = .3 #Hz
         f_max = 30 #Hz
         tic   = time.time()
@@ -4393,7 +4403,7 @@ class OfflineDreamento():
                     fs = 256):
                
         import joblib
-        path_to_DreamentoScorer = DreamentoScorer_path
+        path_to_DreamentoScorer = os.path.abspath(os.path.normpath(DreamentoScorer_path))
         messagebox.showinfo(title = "Bulk Autoscoring", message = 'Autoscoring started ... \nDepending on the number of scorings, this may take a while ... \nIf you selected to store the results, they will be stored in the data folder ...\n An Excel file including the results from all subjects will be stored in the same directory as the initial .txt file\nPlease click on OK and be patient ...')
         # Init dir tio read libraries
         try:
@@ -4406,9 +4416,17 @@ class OfflineDreamento():
             os.chdir('DreamentoScorer')
 
         print(f'current path is {path_to_DreamentoScorer}')
-        from entropy.entropy import spectral_entropy
-        from DreamentoScorer import DreamentoScorer
-        self.SSN = DreamentoScorer(filename='', channel='', fs = fs, T = 30)
+        from antropy.entropy import spectral_entropy
+        scorer_module_path = os.path.join(path_to_DreamentoScorer, 'DreamentoScorer.py')
+        if not os.path.isfile(scorer_module_path):
+            raise FileNotFoundError(f'DreamentoScorer module not found at {scorer_module_path}')
+        spec = importlib.util.spec_from_file_location('dreamento_scorer_module', scorer_module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f'Unable to import DreamentoScorer from {scorer_module_path}')
+        DreamentoScorer_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(DreamentoScorer_module)
+        DreamentoScorer_class = DreamentoScorer_module.DreamentoScorer
+        self.SSN = DreamentoScorer_class(filename='', channel='', fs = fs, T = 30)
         f_min = fmin = .3 #Hz
         f_max = fmax =  30 #Hz
         tic   = time.time()
