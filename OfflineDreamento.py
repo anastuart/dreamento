@@ -179,8 +179,10 @@ class OfflineDreamento():
     #%% Checkbox for autoscoring
         self.is_autoscoring = IntVar(value = 0)
         self.checkbox_is_autoscoring = Checkbutton(self.frame_import, text = "Single-file autoscoring",
-                                  font = 'Calibri 11 ', variable = self.is_autoscoring)#, command = self.scoring_caution)
-        
+                                  font = 'Calibri 11 ', variable = self.is_autoscoring,
+                                  command = self.toggle_autoscoring_controls)
+        self.autoscoring_controls_widgets = []
+        self.autoscoring_controls_created = False
         self.checkbox_is_autoscoring.grid(row = 4, column = 4, sticky="w") 
         
     #%% Checkbox for filtering
@@ -946,7 +948,7 @@ class OfflineDreamento():
                                                  trimperc=5, cmap='RdBu_r', add_colorbar = False)
             # Activate save section
             if int(self.is_autoscoring.get()) == 1: 
-                self.create_save_options_autoscoring()
+                self.show_autoscoring_controls()
                 
             # Create export option
             self.create_save_options()
@@ -1309,7 +1311,11 @@ class OfflineDreamento():
                 ax5.plot(np.arange(len(data_autoscoring1))/self.fs_BrainProducts, spindles_R_highlight* 1e-6, 'green')
                 
             if int(self.checkbox_save_YASA_autoscoring_val.get()) == 1:
-                np.savetxt(self.path_to_EMG.split('.vhdr')[0] + 'Y_ASA_autoscoring_Dreamento_API.txt', self.hypno_pred, fmt='%d')
+                auto_txt_path = self._save_autoscoring_results(
+                    self.hypno_pred,
+                    label='Y_ASA_autoscoring_Dreamento_API'
+                )
+                self._save_autoscoring_metrics(getattr(self, 'stats', None), auto_txt_path)
 
             print(f'request {int(self.automatic_spd_event_deetction.get())}')
 
@@ -1436,6 +1442,23 @@ class OfflineDreamento():
                               command = self.save_results_button)
         self.button_save_mat.grid(row = 7 , column =2)#, padx = 15, pady = 10)
         
+    def show_autoscoring_controls(self):
+        if not self.autoscoring_controls_created:
+            self.create_save_options_autoscoring()
+        else:
+            for widget in self.autoscoring_controls_widgets:
+                widget.grid()
+    
+    def hide_autoscoring_controls(self):
+        for widget in getattr(self, 'autoscoring_controls_widgets', []):
+            widget.grid_remove()
+    
+    def toggle_autoscoring_controls(self):
+        if int(self.is_autoscoring.get()) == 1:
+            self.show_autoscoring_controls()
+        else:
+            self.hide_autoscoring_controls()
+        
     #%% create save options for autoscoring
     def create_save_options_autoscoring(self):
         """
@@ -1449,10 +1472,19 @@ class OfflineDreamento():
         
         
         
+        if self.autoscoring_controls_created:
+            for widget in self.autoscoring_controls_widgets:
+                widget.grid()
+            return
+        
+        self.autoscoring_controls_created = True
+        self.autoscoring_controls_widgets = []
+        
         # Label: Save outcome
         self.label_save_path_autoscoring = Label(self.frame_import, text = "Path to save autoscoring results:",
                                   font = 'Calibri 11 ')
         self.label_save_path_autoscoring.grid(row = 4 , column = 0)#, padx = 15, pady = 10)
+        self.autoscoring_controls_widgets.append(self.label_save_path_autoscoring)
         
         # Define browse button to import hypnos
         self.button_save_browse_autoscoring = Button(self.frame_import, text = "Browse ...", 
@@ -1460,6 +1492,7 @@ class OfflineDreamento():
                                            command = self.save_path_finder,fg = 'blue',
                                            relief = RIDGE)
         self.button_save_browse_autoscoring.grid(row = 5, column = 0)#, padx = 15, pady = 10)
+        self.autoscoring_controls_widgets.append(self.button_save_browse_autoscoring)
         
         
         
@@ -1467,37 +1500,36 @@ class OfflineDreamento():
         self.label_save_filename_autoscoring = Label(self.frame_import, text = "Saving filename:",
                                   font = 'Calibri 11 ')
         self.label_save_filename_autoscoring.grid(row = 4 , column = 1)#)#, padx = 15, pady = 10)
+        self.autoscoring_controls_widgets.append(self.label_save_filename_autoscoring)
         
         # Create entry for user
         self.entry_save_name_autoscoring = Entry(self.frame_import,text = "Subject#_night#.txt ")#, borderwidth = 2, width = 10)
         self.entry_save_name_autoscoring.grid(row = 5, column = 1)#)#, padx = 15, pady = 10)
+        self.autoscoring_controls_widgets.append(self.entry_save_name_autoscoring)
         
         self.button_save_mat_autoscoring = Button(self.frame_import, text = "Save",#, padx = 40, pady=8,
                               font = 'Calibri 11 bold', relief = RIDGE, fg = 'blue',
                               command = self.save_autoscoring_button)
         self.button_save_mat_autoscoring.grid(row = 5 , column =2)#, padx = 15, pady = 10)
+        self.autoscoring_controls_widgets.append(self.button_save_mat_autoscoring)
     #%% ################### DEFINE FUNCTIONS OF BUTTON(S) #######################
     #%% Save autoscorrig button
     def save_autoscoring_button(self):
         
-        if self.entry_save_name_autoscoring.get()[-4:] == '.txt':
-           saving_dir = where_to_save_path + '/' + self.entry_save_name_autoscoring.get()
+        filename = self.entry_save_name_autoscoring.get()
+        if filename.endswith('.txt'):
+            saving_dir = Path(where_to_save_path) / filename
         else:
-           saving_dir = where_to_save_path + '/' + self.entry_save_name_autoscoring.get() + '.txt'
-           
-           a_file = open(saving_dir, "w")
-           a_file.write('=================== Dreamento: an open-source dream engineering toolbox! ===================\nhttps://github.com/dreamento/dreamento')
-           a_file.write('\nThis file has been autoscored by DreamentoScorer! \nSleep stages: Wake:0, N1:1, N2:2, SWS:3, REM:4.\n')
-           a_file.write('============================================================================================\n')
-           
-           for row in self.stage_autoscoring[:,np.newaxis]:
-               np.savetxt(a_file, row, fmt='%1.0f')
-           
-           a_file.close()
-           
-           # Save sleep metrics
-           with open(saving_dir[:-4]+'_metrics.txt', 'w') as convert_file:
-               convert_file.write(json.dumps(self.stats))
+            saving_dir = Path(where_to_save_path) / f'{filename}.txt'
+
+        saving_dir.parent.mkdir(parents=True, exist_ok=True)
+        self._write_autoscoring_file(saving_dir, self.stage_autoscoring)
+
+        # Save sleep metrics
+        metrics_path = saving_dir.with_name(saving_dir.stem + '_metrics.txt')
+        with open(metrics_path, 'w') as convert_file:
+            convert_file.write(json.dumps(self.stats))
+
         messagebox.showinfo(title = "Done!", message = f'Autoscoring results successfully saved in {saving_dir}!')
         
     #%% Function: Import EDF (Browse
@@ -1844,7 +1876,7 @@ class OfflineDreamento():
                                          trimperc=5, cmap='RdBu_r', add_colorbar = False)
             # Activate save section
             if int(self.is_autoscoring.get()) == 1:      
-                self.create_save_options_autoscoring()
+                self.show_autoscoring_controls()
                 
         #%% Analyzing only HDRecorder
         elif int(self.analysis_signal_options.get()) == 3:         
@@ -2318,6 +2350,53 @@ class OfflineDreamento():
         else:
             plt.close(fig)
         return fig
+    
+    def _write_autoscoring_file(self, path, stages):
+        """
+        Write autoscoring stages to a TXT file with the standard Dreamento header.
+        """
+        path = Path(path)
+        stages = np.asarray(stages).flatten()
+        with open(path, "w") as a_file:
+            a_file.write('=================== Dreamento: an open-source dream engineering toolbox! ===================\n')
+            a_file.write('https://github.com/dreamento/dreamento\n')
+            a_file.write('This file has been autoscored by DreamentoScorer!\n')
+            a_file.write('Sleep stages: Wake:0, N1:1, N2:2, SWS:3, REM:4.\n')
+            a_file.write('============================================================================================\n')
+            for stage in stages:
+                a_file.write(f'{int(stage)}\n')
+        return path
+
+    def _auto_output_base_hint(self):
+        for attr in ('path_to_EMG', 'HDRecorderRecording', 'ZmaxDondersRecording'):
+            if hasattr(self, attr):
+                candidate = getattr(self, attr)
+                if candidate:
+                    return candidate
+        return None
+
+    def _save_autoscoring_results(self, stages, label='autoscoring'):
+        """
+        Save autoscoring stages next to the data in DreamentoOutputs.
+        """
+        base_hint = self._auto_output_base_hint()
+        base_dir, base_name = self._resolve_figure_save_context(base_hint=base_hint)
+        target_dir = base_dir / 'DreamentoOutputs'
+        target_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        save_path = target_dir / f'{base_name}_{label}_{timestamp}.txt'
+        self._write_autoscoring_file(save_path, stages)
+        print(f'Autoscoring results saved to {save_path}')
+        return save_path
+
+    def _save_autoscoring_metrics(self, stats, autoscoring_path):
+        if stats is None:
+            return None
+        metrics_path = Path(autoscoring_path).with_name(Path(autoscoring_path).stem + '_metrics.txt')
+        with open(metrics_path, 'w') as convert_file:
+            convert_file.write(json.dumps(stats))
+        print(f'Autoscoring metrics saved to {metrics_path}')
+        return metrics_path
         
     #%% AssignMarkersToRecordedData EEG + TFR
     def AssignMarkersToRecordedData_EEG_TFR(self, data, data_R, sf, path_to_json_markers,EMG_path, markers_to_show = ['light', 'manual', 'sound'],\
